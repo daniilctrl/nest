@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Query } from '@nestjs/common';
 import { 
   ApiTags, 
   ApiOperation, 
   ApiBearerAuth, 
   ApiParam, 
+  ApiQuery,
   ApiCreatedResponse, 
   ApiOkResponse, 
   ApiBadRequestResponse, 
@@ -14,6 +15,7 @@ import {
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Users')
@@ -33,11 +35,14 @@ export class UsersController {
   @Get()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get all users' })
-  @ApiOkResponse({ description: 'List of all users' })
+  @ApiOperation({ summary: 'Get all users with pagination and filtering' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number (starts from 1)', example: 1 })
+  @ApiQuery({ name: 'limit', required: false, description: 'Number of items per page', example: 10 })
+  @ApiQuery({ name: 'login', required: false, description: 'Search by login (partial match)', example: 'john' })
+  @ApiOkResponse({ description: 'Paginated list of users with metadata' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query() query: FindUsersQueryDto) {
+    return this.usersService.findAll(query);
   }
 
   @Get('profile')
