@@ -6,16 +6,22 @@ export class User {
   id: string;
 
   @Column({ unique: true })
+  login: string;
+
+  @Column({ unique: true })
   email: string;
 
   @Column()
   password: string;
 
   @Column()
-  firstName: string;
+  age: number;
 
-  @Column()
-  lastName: string;
+  @Column({ type: 'varchar', length: 1000 })
+  description: string;
+
+  @Column({ nullable: true })
+  refreshToken: string;
 
   @CreateDateColumn()
   createdAt: Date;

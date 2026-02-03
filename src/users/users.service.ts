@@ -14,11 +14,19 @@ export class UsersService {
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
-    const existingUser = await this.usersRepository.findOne({
+    const existingUserByLogin = await this.usersRepository.findOne({
+      where: { login: createUserDto.login },
+    });
+
+    if (existingUserByLogin) {
+      throw new ConflictException('User with this login already exists');
+    }
+
+    const existingUserByEmail = await this.usersRepository.findOne({
       where: { email: createUserDto.email },
     });
 
-    if (existingUser) {
+    if (existingUserByEmail) {
       throw new ConflictException('User with this email already exists');
     }
 
@@ -75,5 +83,9 @@ export class UsersService {
 
   async findByEmail(email: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { email } });
+  }
+
+  async findByLogin(login: string): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { login } });
   }
 }
