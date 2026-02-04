@@ -6,6 +6,7 @@ import * as bcrypt from 'bcrypt';
 import { User } from '../users/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { Role } from './enums/role.enum';
 
 export interface AuthResponse {
   accessToken: string;
@@ -56,7 +57,7 @@ export class AuthService {
 
     const savedUser = await this.usersRepository.save(user);
 
-    const tokens = await this.generateTokens(savedUser.id, savedUser.login);
+    const tokens = await this.generateTokens(savedUser.id, savedUser.login, savedUser.role);
     await this.updateRefreshToken(savedUser.id, tokens.refreshToken);
 
     return {
@@ -87,7 +88,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const tokens = await this.generateTokens(user.id, user.login);
+    const tokens = await this.generateTokens(user.id, user.login, user.role);
     await this.updateRefreshToken(user.id, tokens.refreshToken);
 
     return {
@@ -118,7 +119,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const tokens = await this.generateTokens(user.id, user.login);
+    const tokens = await this.generateTokens(user.id, user.login, user.role);
     await this.updateRefreshToken(user.id, tokens.refreshToken);
 
     return tokens;
@@ -128,8 +129,8 @@ export class AuthService {
     await this.usersRepository.update(userId, { refreshToken: undefined });
   }
 
-  private async generateTokens(userId: string, login: string): Promise<{ accessToken: string; refreshToken: string }> {
-    const payload = { sub: userId, login };
+  private async generateTokens(userId: string, login: string, role: Role): Promise<{ accessToken: string; refreshToken: string }> {
+    const payload = { sub: userId, login, role };
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
