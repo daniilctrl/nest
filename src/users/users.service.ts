@@ -107,7 +107,7 @@ export class UsersService {
 
   async remove(id: string): Promise<void> {
     const user = await this.findOne(id);
-    await this.usersRepository.remove(user);
+    await this.usersRepository.softRemove(user);
   }
 
   async findByEmail(email: string): Promise<User | null> {
