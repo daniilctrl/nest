@@ -5,9 +5,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { JwtPayload } from './jwt.strategy';
+import { JWT_REFRESH_STRATEGY } from '../constants';
 
 @Injectable()
-export class RefreshTokenStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
+export class RefreshTokenStrategy extends PassportStrategy(Strategy, JWT_REFRESH_STRATEGY) {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
@@ -20,7 +21,7 @@ export class RefreshTokenStrategy extends PassportStrategy(Strategy, 'jwt-refres
     });
   }
 
-  async validate(req: any, payload: JwtPayload): Promise<User> {
+  async validate(req: any, payload: JwtPayload): Promise<Omit<User, 'password'>> {
     const refreshToken = req.body.refreshToken;
     
     const user = await this.usersRepository.findOne({
@@ -31,6 +32,7 @@ export class RefreshTokenStrategy extends PassportStrategy(Strategy, 'jwt-refres
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    return user;
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
   }
 }

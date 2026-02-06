@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
 import { 
   ApiTags, 
   ApiOperation, 
@@ -21,6 +21,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/enums/role.enum';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { User } from './entities/user.entity';
 
 @ApiTags('Users')
 @Controller('users')
@@ -62,8 +64,8 @@ export class UsersController {
   @ApiOperation({ summary: 'Get current user profile (Any authenticated user)' })
   @ApiOkResponse({ description: 'User profile data' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
-  getProfile(@Request() req) {
-    return req.user;
+  getProfile(@CurrentUser() user: User) {
+    return user;
   }
 
   @Get(':id')

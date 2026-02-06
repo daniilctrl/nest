@@ -2,11 +2,11 @@ import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/co
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
 import { User } from '../users/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { Role } from './enums/role.enum';
+import { hashPassword, comparePasswords } from '../common/utils/password.util';
 
 export interface AuthResponse {
   accessToken: string;
@@ -45,7 +45,7 @@ export class AuthService {
       throw new ConflictException('User with this email already exists');
     }
 
-    const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+    const hashedPassword = await hashPassword(registerDto.password);
 
     const user = this.usersRepository.create({
       login: registerDto.login,
@@ -82,7 +82,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
+    const isPasswordValid = await comparePasswords(loginDto.password, user.password);
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
@@ -113,7 +113,7 @@ export class AuthService {
       throw new UnauthorizedException('Access denied');
     }
 
-    const isRefreshTokenValid = await bcrypt.compare(refreshToken, user.refreshToken);
+    const isRefreshTokenValid = await comparePasswords(refreshToken, user.refreshToken);
 
     if (!isRefreshTokenValid) {
       throw new UnauthorizedException('Invalid refresh token');
@@ -150,7 +150,7 @@ export class AuthService {
   }
 
   private async updateRefreshToken(userId: string, refreshToken: string): Promise<void> {
-    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+    const hashedRefreshToken = await hashPassword(refreshToken);
     await this.usersRepository.update(userId, { refreshToken: hashedRefreshToken });
   }
 }

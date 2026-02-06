@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { 
   ApiTags, 
   ApiOperation, 
@@ -15,6 +15,8 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { CurrentUser } from './decorators/current-user.decorator';
+import { User } from '../users/entities/user.entity';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -47,9 +49,8 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiOkResponse({ description: 'Token successfully refreshed' })
   @ApiUnauthorizedResponse({ description: 'Invalid refresh token' })
-  async refreshTokens(@Request() req, @Body() refreshTokenDto: RefreshTokenDto) {
-    const userId = req.user.id;
-    return this.authService.refreshTokens(userId, refreshTokenDto.refreshToken);
+  async refreshTokens(@CurrentUser() user: User, @Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authService.refreshTokens(user.id, refreshTokenDto.refreshToken);
   }
 
   @Post('logout')
@@ -59,8 +60,8 @@ export class AuthController {
   @ApiOperation({ summary: 'Logout user' })
   @ApiOkResponse({ description: 'User successfully logged out' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
-  async logout(@Request() req) {
-    await this.authService.logout(req.user.id);
+  async logout(@CurrentUser() user: User) {
+    await this.authService.logout(user.id);
     return { message: 'Logged out successfully' };
   }
 }

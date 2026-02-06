@@ -5,7 +5,7 @@ import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
 import { User } from './entities/user.entity';
-import * as bcrypt from 'bcrypt';
+import { hashPassword } from '../common/utils/password.util';
 
 @Injectable()
 export class UsersService {
@@ -31,7 +31,7 @@ export class UsersService {
       throw new ConflictException('User with this email already exists');
     }
 
-    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+    const hashedPassword = await hashPassword(createUserDto.password);
 
     const user = this.usersRepository.create({
       ...createUserDto,
@@ -96,13 +96,19 @@ export class UsersService {
       }
     }
 
-    if (updateUserDto.password) {
-      updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
-    }
+    const hashedPassword = updateUserDto.password
+      ? await hashPassword(updateUserDto.password)
+      : undefined;
 
-    Object.assign(user, updateUserDto);
+    const { password, ...restDto } = updateUserDto;
 
-    return this.usersRepository.save(user);
+    const dataToSave = {
+      ...user,
+      ...restDto,
+      ...(hashedPassword && { password: hashedPassword }),
+    };
+
+    return this.usersRepository.save(dataToSave);
   }
 
   async remove(id: string): Promise<void> {

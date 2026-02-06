@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Role } from '../enums/role.enum';
+import { JWT_STRATEGY } from '../constants';
 
 export interface JwtPayload {
   sub: string;
@@ -13,7 +14,7 @@ export interface JwtPayload {
 }
 
 @Injectable()
-export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
+export class JwtStrategy extends PassportStrategy(Strategy, JWT_STRATEGY) {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
@@ -25,7 +26,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     });
   }
 
-  async validate(payload: JwtPayload): Promise<User> {
+  async validate(payload: JwtPayload): Promise<Omit<User, 'password'>> {
     const user = await this.usersRepository.findOne({
       where: { id: payload.sub },
     });
@@ -34,6 +35,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('User not found');
     }
 
-    return user;
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
   }
 }
