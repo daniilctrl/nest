@@ -1,17 +1,27 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
-import { 
-  ApiTags, 
-  ApiOperation, 
-  ApiBearerAuth, 
-  ApiParam, 
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Query,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiParam,
   ApiQuery,
-  ApiCreatedResponse, 
-  ApiOkResponse, 
-  ApiBadRequestResponse, 
-  ApiConflictResponse, 
-  ApiUnauthorizedResponse, 
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiBadRequestResponse,
+  ApiConflictResponse,
+  ApiUnauthorizedResponse,
   ApiNotFoundResponse,
-  ApiForbiddenResponse
+  ApiForbiddenResponse,
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -47,10 +57,27 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Admin)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get all users with pagination and filtering (Admin only)' })
-  @ApiQuery({ name: 'page', required: false, description: 'Page number (starts from 1)', example: 1 })
-  @ApiQuery({ name: 'limit', required: false, description: 'Number of items per page', example: 10 })
-  @ApiQuery({ name: 'login', required: false, description: 'Search by login (partial match)', example: 'john' })
+  @ApiOperation({
+    summary: 'Get all users with pagination and filtering (Admin only)',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number (starts from 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    example: 10,
+  })
+  @ApiQuery({
+    name: 'login',
+    required: false,
+    description: 'Search by login (partial match)',
+    example: 'john',
+  })
   @ApiOkResponse({ description: 'Paginated list of users with metadata' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'Forbidden - Admin role required' })
@@ -61,7 +88,9 @@ export class UsersController {
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get current user profile (Any authenticated user)' })
+  @ApiOperation({
+    summary: 'Get current user profile (Any authenticated user)',
+  })
   @ApiOkResponse({ description: 'User profile data' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   getProfile(@CurrentUser() user: User) {

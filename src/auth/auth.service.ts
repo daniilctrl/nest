@@ -1,4 +1,8 @@
-import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -57,7 +61,11 @@ export class AuthService {
 
     const savedUser = await this.usersRepository.save(user);
 
-    const tokens = await this.generateTokens(savedUser.id, savedUser.login, savedUser.role);
+    const tokens = await this.generateTokens(
+      savedUser.id,
+      savedUser.login,
+      savedUser.role,
+    );
     await this.updateRefreshToken(savedUser.id, tokens.refreshToken);
 
     return {
@@ -82,7 +90,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const isPasswordValid = await comparePasswords(loginDto.password, user.password);
+    const isPasswordValid = await comparePasswords(
+      loginDto.password,
+      user.password,
+    );
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
@@ -104,7 +115,10 @@ export class AuthService {
     };
   }
 
-  async refreshTokens(userId: string, refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
+  async refreshTokens(
+    userId: string,
+    refreshToken: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
     const user = await this.usersRepository.findOne({
       where: { id: userId },
     });
@@ -113,7 +127,10 @@ export class AuthService {
       throw new UnauthorizedException('Access denied');
     }
 
-    const isRefreshTokenValid = await comparePasswords(refreshToken, user.refreshToken);
+    const isRefreshTokenValid = await comparePasswords(
+      refreshToken,
+      user.refreshToken,
+    );
 
     if (!isRefreshTokenValid) {
       throw new UnauthorizedException('Invalid refresh token');
@@ -129,16 +146,23 @@ export class AuthService {
     await this.usersRepository.update(userId, { refreshToken: undefined });
   }
 
-  private async generateTokens(userId: string, login: string, role: Role): Promise<{ accessToken: string; refreshToken: string }> {
+  private async generateTokens(
+    userId: string,
+    login: string,
+    role: Role,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
     const payload = { sub: userId, login, role };
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
-        secret: process.env.JWT_SECRET || 'your-secret-key-change-in-production',
+        secret:
+          process.env.JWT_SECRET || 'your-secret-key-change-in-production',
         expiresIn: '15m',
       }),
       this.jwtService.signAsync(payload, {
-        secret: process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key-change-in-production',
+        secret:
+          process.env.JWT_REFRESH_SECRET ||
+          'your-refresh-secret-key-change-in-production',
         expiresIn: '7d',
       }),
     ]);
@@ -149,8 +173,13 @@ export class AuthService {
     };
   }
 
-  private async updateRefreshToken(userId: string, refreshToken: string): Promise<void> {
+  private async updateRefreshToken(
+    userId: string,
+    refreshToken: string,
+  ): Promise<void> {
     const hashedRefreshToken = await hashPassword(refreshToken);
-    await this.usersRepository.update(userId, { refreshToken: hashedRefreshToken });
+    await this.usersRepository.update(userId, {
+      refreshToken: hashedRefreshToken,
+    });
   }
 }

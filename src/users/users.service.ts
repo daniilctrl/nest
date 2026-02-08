@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
@@ -51,9 +55,7 @@ export class UsersService {
     const { page = 1, limit = 10, login } = query;
     const skip = (page - 1) * limit;
 
-    const whereCondition = login
-      ? { login: Like(`%${login}%`) }
-      : {};
+    const whereCondition = login ? { login: Like(`%${login}%`) } : {};
 
     const [data, total] = await this.usersRepository.findAndCount({
       where: whereCondition,
