@@ -6,10 +6,13 @@ import {
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
 @Entity('avatars')
+@Index(['userId', 'deletedAt'])
+@Index(['userId', 'createdAt'])
 export class Avatar {
   @PrimaryGeneratedColumn('uuid')
   id: string;

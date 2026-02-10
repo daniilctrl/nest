@@ -5,10 +5,12 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  Index,
 } from 'typeorm';
 import { Role } from '../../auth/enums/role.enum';
 
 @Entity('users')
+@Index(['age', 'deletedAt'])
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -27,6 +27,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
+import { FindMostActiveUsersQueryDto } from './dto/find-most-active-users-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -95,6 +96,49 @@ export class UsersController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   getProfile(@CurrentUser() user: User) {
     return user;
+  }
+
+  @Get('most-active')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.Admin)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary:
+      'Get most active users: >2 active avatars, has description, age in range (Admin only)',
+  })
+  @ApiQuery({
+    name: 'ageMin',
+    required: true,
+    description: 'Minimum age (inclusive)',
+    example: 18,
+  })
+  @ApiQuery({
+    name: 'ageMax',
+    required: true,
+    description: 'Maximum age (inclusive)',
+    example: 99,
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number (starts from 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    example: 20,
+  })
+  @ApiOkResponse({
+    description:
+      'Paginated list of most active users with last uploaded avatar each',
+  })
+  @ApiBadRequestResponse({ description: 'Bad request - validation failed' })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiForbiddenResponse({ description: 'Forbidden - Admin role required' })
+  getMostActive(@Query() query: FindMostActiveUsersQueryDto) {
+    return this.usersService.findMostActiveUsers(query);
   }
 
   @Get(':id')

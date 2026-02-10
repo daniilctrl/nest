@@ -2,20 +2,40 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
+import { FindMostActiveUsersQueryDto } from './dto/find-most-active-users-query.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like } from 'typeorm';
+import { Repository, Like, IsNull, In } from 'typeorm';
 import { User } from './entities/user.entity';
+import { Avatar } from '../avatars/entities/avatar.entity';
 import { hashPassword } from '../common/utils/password.util';
+
+const MIN_ACTIVE_AVATARS_FOR_MOST_ACTIVE = 2;
+
+export interface MostActiveUserItem {
+  user: User;
+  lastAvatar: Avatar | null;
+}
+
+export interface MostActiveUsersResult {
+  data: MostActiveUserItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    @InjectRepository(Avatar)
+    private avatarRepository: Repository<Avatar>,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -63,6 +83,77 @@ export class UsersService {
       skip: skip,
       order: { createdAt: 'DESC' },
     });
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
+  }
+
+  async findMostActiveUsers(
+    query: FindMostActiveUsersQueryDto,
+  ): Promise<MostActiveUsersResult> {
+    const { ageMin, ageMax, page = 1, limit = 20 } = query;
+
+    if (ageMin > ageMax) {
+      throw new BadRequestException(
+        'ageMin must be less than or equal to ageMax',
+      );
+    }
+
+    const skip = (page - 1) * limit;
+
+    const usersWithManyActiveAvatarsSubQuery = this.avatarRepository
+      .createQueryBuilder('a')
+      .select('a.user_id')
+      .where('a.deleted_at IS NULL')
+      .groupBy('a.user_id')
+      .having('COUNT(*) > :minActive', {
+        minActive: MIN_ACTIVE_AVATARS_FOR_MOST_ACTIVE,
+      });
+
+    const qb = this.usersRepository
+      .createQueryBuilder('u')
+      .where(`u.id IN (${usersWithManyActiveAvatarsSubQuery.getQuery()})`)
+      .andWhere('TRIM(u.description) != :empty', { empty: '' })
+      .andWhere('u.age >= :ageMin', { ageMin })
+      .andWhere('u.age <= :ageMax', { ageMax })
+      .andWhere('u.deleted_at IS NULL')
+      .orderBy('u.created_at', 'DESC')
+      .skip(skip)
+      .take(limit);
+
+    qb.setParameters({
+      ...qb.getParameters(),
+      ...usersWithManyActiveAvatarsSubQuery.getParameters(),
+    });
+
+    const [users, total] = await qb.getManyAndCount();
+
+    const userIds = users.map((user) => user.id);
+    const lastAvatarByUserId = new Map<string, Avatar>();
+
+    if (userIds.length > 0) {
+      const avatars = await this.avatarRepository.find({
+        where: { userId: In(userIds), deletedAt: IsNull() },
+        order: { createdAt: 'DESC' },
+      });
+      for (const avatar of avatars) {
+        if (!lastAvatarByUserId.has(avatar.userId)) {
+          lastAvatarByUserId.set(avatar.userId, avatar);
+        }
+      }
+    }
+
+    const data: MostActiveUserItem[] = users.map((user) => ({
+      user,
+      lastAvatar: lastAvatarByUserId.get(user.id) ?? null,
+    }));
 
     const totalPages = Math.ceil(total / limit);
 
