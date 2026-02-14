@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   Query,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -34,6 +35,8 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/enums/role.enum';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from './entities/user.entity';
+import { CacheTTL } from '@nestjs/cache-manager';
+import { HttpCacheInterceptor } from '../cache/http-cache.interceptor';
 
 @ApiTags('Users')
 @Controller('users')
@@ -57,6 +60,8 @@ export class UsersController {
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Admin)
+  @UseInterceptors(HttpCacheInterceptor)
+  @CacheTTL(30_000)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Get all users with pagination and filtering (Admin only)',
@@ -88,6 +93,8 @@ export class UsersController {
 
   @Get('profile')
   @UseGuards(JwtAuthGuard)
+  @UseInterceptors(HttpCacheInterceptor)
+  @CacheTTL(30_000)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Get current user profile (Any authenticated user)',

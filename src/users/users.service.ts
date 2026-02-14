@@ -110,9 +110,9 @@ export class UsersService {
 
     const usersWithManyActiveAvatarsSubQuery = this.avatarRepository
       .createQueryBuilder('a')
-      .select('a.user_id')
-      .where('a.deleted_at IS NULL')
-      .groupBy('a.user_id')
+      .select('a.userId')
+      .where('a.deletedAt IS NULL')
+      .groupBy('a.userId')
       .having('COUNT(*) > :minActive', {
         minActive: MIN_ACTIVE_AVATARS_FOR_MOST_ACTIVE,
       });
@@ -123,8 +123,8 @@ export class UsersService {
       .andWhere('TRIM(u.description) != :empty', { empty: '' })
       .andWhere('u.age >= :ageMin', { ageMin })
       .andWhere('u.age <= :ageMax', { ageMax })
-      .andWhere('u.deleted_at IS NULL')
-      .orderBy('u.created_at', 'DESC')
+      .andWhere('u.deletedAt IS NULL')
+      .orderBy('u.createdAt', 'DESC')
       .skip(skip)
       .take(limit);
 
