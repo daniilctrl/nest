@@ -3,7 +3,11 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  Inject,
+  Logger,
 } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
@@ -13,11 +17,13 @@ import { Repository, Like, IsNull, In } from 'typeorm';
 import { User } from './entities/user.entity';
 import { Avatar } from '../avatars/entities/avatar.entity';
 import { hashPassword } from '../common/utils/password.util';
+import { Transactional } from 'typeorm-transactional';
+import { TransferBalanceDto } from './dto/transfer-balance.dto';
 
 const MIN_ACTIVE_AVATARS_FOR_MOST_ACTIVE = 2;
 
 export interface MostActiveUserItem {
-  user: User;
+  user: Omit<User, 'password' | 'refreshToken'>;
   lastAvatar: Avatar | null;
 }
 
@@ -31,14 +37,22 @@ export interface MostActiveUsersResult {
 
 @Injectable()
 export class UsersService {
+  private static readonly CENTS_IN_DOLLAR = 100;
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     @InjectRepository(Avatar)
     private avatarRepository: Repository<Avatar>,
+    @Inject(CACHE_MANAGER)
+    private readonly cacheManager: Cache,
   ) {}
 
-  async create(createUserDto: CreateUserDto): Promise<User> {
+  async create(
+    createUserDto: CreateUserDto,
+  ): Promise<Omit<User, 'password' | 'refreshToken'>> {
+    this.logger.log(`Creating user with login "${createUserDto.login}"`);
     const existingUserByLogin = await this.usersRepository.findOne({
       where: { login: createUserDto.login },
     });
@@ -62,16 +76,21 @@ export class UsersService {
       password: hashedPassword,
     });
 
-    return this.usersRepository.save(user);
+    const createdUser = await this.usersRepository.save(user);
+    await this.invalidateUsersCache();
+    return this.sanitizeUser(createdUser);
   }
 
   async findAll(query: FindUsersQueryDto): Promise<{
-    data: User[];
+    data: Array<Omit<User, 'password' | 'refreshToken'>>;
     total: number;
     page: number;
     limit: number;
     totalPages: number;
   }> {
+    this.logger.debug(
+      `Fetching users list (page=${query.page ?? 1}, limit=${query.limit ?? 10})`,
+    );
     const { page = 1, limit = 10, login } = query;
     const skip = (page - 1) * limit;
 
@@ -87,7 +106,7 @@ export class UsersService {
     const totalPages = Math.ceil(total / limit);
 
     return {
-      data,
+      data: data.map((user) => this.sanitizeUser(user)),
       total,
       page,
       limit,
@@ -98,6 +117,9 @@ export class UsersService {
   async findMostActiveUsers(
     query: FindMostActiveUsersQueryDto,
   ): Promise<MostActiveUsersResult> {
+    this.logger.debug(
+      `Fetching most active users (ageMin=${query.ageMin}, ageMax=${query.ageMax})`,
+    );
     const { ageMin, ageMax, page = 1, limit = 20 } = query;
 
     if (ageMin > ageMax) {
@@ -151,7 +173,7 @@ export class UsersService {
     }
 
     const data: MostActiveUserItem[] = users.map((user) => ({
-      user,
+      user: this.sanitizeUser(user),
       lastAvatar: lastAvatarByUserId.get(user.id) ?? null,
     }));
 
@@ -166,20 +188,29 @@ export class UsersService {
     };
   }
 
-  async findOne(id: string): Promise<User> {
+  async findOne(id: string): Promise<Omit<User, 'password' | 'refreshToken'>> {
+    this.logger.debug(`Fetching user by id ${id}`);
     const user = await this.usersRepository.findOne({ where: { id } });
 
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    return user;
+    return this.sanitizeUser(user);
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
-    const user = await this.findOne(id);
+  async update(
+    id: string,
+    updateUserDto: UpdateUserDto,
+  ): Promise<Omit<User, 'password' | 'refreshToken'>> {
+    this.logger.log(`Updating user ${id}`);
+    const existingUser = await this.usersRepository.findOne({ where: { id } });
 
-    if (updateUserDto.email && updateUserDto.email !== user.email) {
+    if (!existingUser) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    if (updateUserDto.email && updateUserDto.email !== existingUser.email) {
       const existingUser = await this.usersRepository.findOne({
         where: { email: updateUserDto.email },
       });
@@ -196,17 +227,24 @@ export class UsersService {
     const { password, ...restDto } = updateUserDto;
 
     const dataToSave = {
-      ...user,
+      ...existingUser,
       ...restDto,
       ...(hashedPassword && { password: hashedPassword }),
     };
 
-    return this.usersRepository.save(dataToSave);
+    const updatedUser = await this.usersRepository.save(dataToSave);
+    await this.invalidateUsersCache();
+    return this.sanitizeUser(updatedUser);
   }
 
   async remove(id: string): Promise<void> {
-    const user = await this.findOne(id);
+    this.logger.log(`Removing user ${id}`);
+    const user = await this.usersRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
     await this.usersRepository.softRemove(user);
+    await this.invalidateUsersCache();
   }
 
   async findByEmail(email: string): Promise<User | null> {
@@ -215,5 +253,84 @@ export class UsersService {
 
   async findByLogin(login: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { login } });
+  }
+
+  @Transactional()
+  async transferBalance(transferBalanceDto: TransferBalanceDto): Promise<void> {
+    const { fromUserId, toUserId, amount } = transferBalanceDto;
+    this.logger.log(
+      `Transferring ${amount} from user ${fromUserId} to user ${toUserId}`,
+    );
+
+    if (fromUserId === toUserId) {
+      throw new BadRequestException(
+        'Sender and receiver must be different users',
+      );
+    }
+
+    const orderedIds = [fromUserId, toUserId].sort();
+    const users = await this.usersRepository
+      .createQueryBuilder('user')
+      .setLock('pessimistic_write')
+      .where('user.id IN (:...ids)', { ids: orderedIds })
+      .orderBy('user.id', 'ASC')
+      .getMany();
+
+    const sender = users.find((user) => user.id === fromUserId);
+    if (!sender) {
+      throw new NotFoundException(`User with ID ${fromUserId} not found`);
+    }
+
+    const receiver = users.find((user) => user.id === toUserId);
+    if (!receiver) {
+      throw new NotFoundException(`User with ID ${toUserId} not found`);
+    }
+
+    const amountCents = this.toCents(amount);
+    const senderBalanceCents = this.toCents(sender.balance);
+    const receiverBalanceCents = this.toCents(receiver.balance);
+    const nextSenderBalanceCents = senderBalanceCents - amountCents;
+
+    if (nextSenderBalanceCents < 0) {
+      throw new BadRequestException('Insufficient balance');
+    }
+
+    sender.balance = this.toBalanceValue(nextSenderBalanceCents);
+    receiver.balance = this.toBalanceValue(receiverBalanceCents + amountCents);
+
+    await this.usersRepository.save([sender, receiver]);
+    await this.invalidateUsersCache();
+  }
+
+  async resetAllBalances(): Promise<void> {
+    this.logger.log('Resetting balances for all active users');
+    await this.usersRepository
+      .createQueryBuilder()
+      .update(User)
+      .set({ balance: '0.00' })
+      .where('deletedAt IS NULL')
+      .execute();
+    await this.invalidateUsersCache();
+  }
+
+  private toCents(value: string | number): number {
+    const numericValue = typeof value === 'number' ? value : Number(value);
+    return Math.round(numericValue * UsersService.CENTS_IN_DOLLAR);
+  }
+
+  private toBalanceValue(cents: number): string {
+    return (cents / UsersService.CENTS_IN_DOLLAR).toFixed(2);
+  }
+
+  private sanitizeUser(user: User): Omit<User, 'password' | 'refreshToken'> {
+    const { password, refreshToken, ...safeUser } = user;
+    void password;
+    void refreshToken;
+    return safeUser;
+  }
+
+  private async invalidateUsersCache(): Promise<void> {
+    await this.cacheManager.clear();
+    this.logger.debug('Users-related cache invalidated');
   }
 }

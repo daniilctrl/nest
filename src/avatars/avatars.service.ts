@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ForbiddenException,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
@@ -18,6 +19,8 @@ import { IUploadedMulterFile } from '../providers/files/s3/interfaces/upload-fil
 
 @Injectable()
 export class AvatarsService {
+  private readonly logger = new Logger(AvatarsService.name);
+
   constructor(
     @InjectRepository(Avatar)
     private readonly avatarRepository: Repository<Avatar>,
@@ -35,6 +38,7 @@ export class AvatarsService {
     userId: string,
     file: IUploadedMulterFile,
   ): Promise<Avatar> {
+    this.logger.log(`Uploading avatar for user ${userId}`);
     if (!file?.buffer) {
       throw new BadRequestException('File is required');
     }
@@ -72,6 +76,7 @@ export class AvatarsService {
   }
 
   async removeAvatar(avatarId: string, userId: string): Promise<void> {
+    this.logger.log(`Removing avatar ${avatarId} for user ${userId}`);
     const avatar = await this.avatarRepository.findOne({
       where: { id: avatarId },
     });

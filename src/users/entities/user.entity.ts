@@ -31,6 +31,14 @@ export class User {
   description: string;
 
   @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
+  balance: string;
+
+  @Column({
     type: 'enum',
     enum: Role,
     default: Role.User,

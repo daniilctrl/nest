@@ -2,6 +2,7 @@ import {
   Injectable,
   ConflictException,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -26,6 +27,8 @@ export interface AuthResponse {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
@@ -33,6 +36,7 @@ export class AuthService {
   ) {}
 
   async register(registerDto: RegisterDto): Promise<AuthResponse> {
+    this.logger.log(`Register request for login "${registerDto.login}"`);
     const existingUserByLogin = await this.usersRepository.findOne({
       where: { login: registerDto.login },
     });
@@ -82,6 +86,7 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto): Promise<AuthResponse> {
+    this.logger.log(`Login request for login "${loginDto.login}"`);
     const user = await this.usersRepository.findOne({
       where: { login: loginDto.login },
     });
@@ -119,6 +124,7 @@ export class AuthService {
     userId: string,
     refreshToken: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
+    this.logger.debug(`Refreshing token for user ${userId}`);
     const user = await this.usersRepository.findOne({
       where: { id: userId },
     });
@@ -143,6 +149,7 @@ export class AuthService {
   }
 
   async logout(userId: string): Promise<void> {
+    this.logger.log(`Logout request for user ${userId}`);
     await this.usersRepository.update(userId, { refreshToken: undefined });
   }
 

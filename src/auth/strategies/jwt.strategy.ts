@@ -27,7 +27,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, JWT_STRATEGY) {
     });
   }
 
-  async validate(payload: JwtPayload): Promise<Omit<User, 'password'>> {
+  async validate(
+    payload: JwtPayload,
+  ): Promise<Omit<User, 'password' | 'refreshToken'>> {
     const user = await this.usersRepository.findOne({
       where: { id: payload.sub },
     });
@@ -36,7 +38,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, JWT_STRATEGY) {
       throw new UnauthorizedException('User not found');
     }
 
-    const { password, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+    const { password, refreshToken, ...safeUser } = user;
+    void password;
+    void refreshToken;
+    return safeUser;
   }
 }

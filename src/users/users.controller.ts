@@ -37,6 +37,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from './entities/user.entity';
 import { CacheTTL } from '@nestjs/cache-manager';
 import { HttpCacheInterceptor } from '../cache/http-cache.interceptor';
+import { TransferBalanceDto } from './dto/transfer-balance.dto';
 
 @ApiTags('Users')
 @Controller('users')
@@ -189,5 +190,21 @@ export class UsersController {
   @ApiNotFoundResponse({ description: 'User not found' })
   remove(@Param('id') id: string) {
     return this.usersService.remove(id);
+  }
+
+  @Post('transfer')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.Admin)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Transfer money from one user balance to another (Admin only)',
+  })
+  @ApiCreatedResponse({ description: 'Transfer successfully processed' })
+  @ApiBadRequestResponse({ description: 'Invalid transfer payload' })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiForbiddenResponse({ description: 'Forbidden - Admin role required' })
+  @ApiNotFoundResponse({ description: 'Sender or receiver user not found' })
+  transfer(@Body() transferBalanceDto: TransferBalanceDto) {
+    return this.usersService.transferBalance(transferBalanceDto);
   }
 }

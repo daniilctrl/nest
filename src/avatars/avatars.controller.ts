@@ -8,6 +8,8 @@ import {
   UseInterceptors,
   UploadedFile,
   ParseUUIDPipe,
+  HttpStatus,
+  ParseFilePipeBuilder,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -66,7 +68,20 @@ export class AvatarsController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   uploadAvatar(
     @CurrentUser() user: User,
-    @UploadedFile() file: IUploadedMulterFile,
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({
+          fileType: /(jpg|jpeg|png|gif|webp)$/i,
+        })
+        .addMaxSizeValidator({
+          maxSize: 5 * 1024 * 1024,
+        })
+        .build({
+          fileIsRequired: true,
+          errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        }),
+    )
+    file: IUploadedMulterFile,
   ): Promise<Avatar> {
     return this.avatarsService.uploadAvatar(user.id, file);
   }
