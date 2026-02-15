@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
-import { createKeyv } from '@keyv/redis';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
@@ -14,8 +13,10 @@ import { DataSource } from 'typeorm';
 import { addTransactionalDataSource } from 'typeorm-transactional';
 import { BullModule } from '@nestjs/bullmq';
 import { BalanceResetModule } from './balance-reset/balance-reset.module';
-
-const CACHE_TTL_MS = 30 * 1000;
+import {
+  getBullModuleOptions,
+  getCacheModuleOptions,
+} from './common/config/redis.config';
 
 @Module({
   imports: [
@@ -27,31 +28,14 @@ const CACHE_TTL_MS = 30 * 1000;
       isGlobal: true,
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const redisUrl =
-          configService.get<string>('REDIS_URL') ?? 'redis://localhost:6379';
-        return {
-          ttl: CACHE_TTL_MS,
-          stores: [createKeyv(redisUrl)],
-        };
-      },
+      useFactory: (configService: ConfigService) =>
+        getCacheModuleOptions(configService),
     }),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const redisUrl =
-          configService.get<string>('REDIS_URL') ?? 'redis://localhost:6379';
-        const parsedRedisUrl = new URL(redisUrl);
-
-        return {
-          connection: {
-            host: parsedRedisUrl.hostname,
-            port: Number(parsedRedisUrl.port || 6379),
-            password: parsedRedisUrl.password || undefined,
-          },
-        };
-      },
+      useFactory: (configService: ConfigService) =>
+        getBullModuleOptions(configService),
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
