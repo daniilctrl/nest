@@ -12,13 +12,15 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { FindMostActiveUsersQueryDto } from './dto/find-most-active-users-query.dto';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like, IsNull, In } from 'typeorm';
 import { User } from './entities/user.entity';
 import { Avatar } from '../avatars/entities/avatar.entity';
 import { hashPassword } from '../common/utils/password.util';
 import { Transactional } from 'typeorm-transactional';
 import { TransferBalanceDto } from './dto/transfer-balance.dto';
+import { USERS_REPOSITORY } from './ports/users-repository.port';
+import type { UsersRepositoryPort } from './ports/users-repository.port';
+import { AVATARS_REPOSITORY } from '../avatars/ports/avatars-repository.port';
+import type { AvatarsRepositoryPort } from '../avatars/ports/avatars-repository.port';
 
 const MIN_ACTIVE_AVATARS_FOR_MOST_ACTIVE = 2;
 
@@ -41,10 +43,10 @@ export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
   constructor(
-    @InjectRepository(User)
-    private usersRepository: Repository<User>,
-    @InjectRepository(Avatar)
-    private avatarRepository: Repository<Avatar>,
+    @Inject(USERS_REPOSITORY)
+    private readonly usersRepository: UsersRepositoryPort,
+    @Inject(AVATARS_REPOSITORY)
+    private readonly avatarsRepository: AvatarsRepositoryPort,
     @Inject(CACHE_MANAGER)
     private readonly cacheManager: Cache,
   ) {}
@@ -53,17 +55,17 @@ export class UsersService {
     createUserDto: CreateUserDto,
   ): Promise<Omit<User, 'password' | 'refreshToken'>> {
     this.logger.log(`Creating user with login "${createUserDto.login}"`);
-    const existingUserByLogin = await this.usersRepository.findOne({
-      where: { login: createUserDto.login },
-    });
+    const existingUserByLogin = await this.usersRepository.findByLogin(
+      createUserDto.login,
+    );
 
     if (existingUserByLogin) {
       throw new ConflictException('User with this login already exists');
     }
 
-    const existingUserByEmail = await this.usersRepository.findOne({
-      where: { email: createUserDto.email },
-    });
+    const existingUserByEmail = await this.usersRepository.findByEmail(
+      createUserDto.email,
+    );
 
     if (existingUserByEmail) {
       throw new ConflictException('User with this email already exists');
@@ -71,12 +73,10 @@ export class UsersService {
 
     const hashedPassword = await hashPassword(createUserDto.password);
 
-    const user = this.usersRepository.create({
+    const createdUser = await this.usersRepository.createAndSave({
       ...createUserDto,
       password: hashedPassword,
     });
-
-    const createdUser = await this.usersRepository.save(user);
     await this.invalidateUsersCache();
     return this.sanitizeUser(createdUser);
   }
@@ -92,15 +92,10 @@ export class UsersService {
       `Fetching users list (page=${query.page ?? 1}, limit=${query.limit ?? 10})`,
     );
     const { page = 1, limit = 10, login } = query;
-    const skip = (page - 1) * limit;
-
-    const whereCondition = login ? { login: Like(`%${login}%`) } : {};
-
-    const [data, total] = await this.usersRepository.findAndCount({
-      where: whereCondition,
-      take: limit,
-      skip: skip,
-      order: { createdAt: 'DESC' },
+    const { data, total } = await this.usersRepository.findPaginated({
+      page,
+      limit,
+      login,
     });
 
     const totalPages = Math.ceil(total / limit);
@@ -128,49 +123,16 @@ export class UsersService {
       );
     }
 
-    const skip = (page - 1) * limit;
-
-    const usersWithManyActiveAvatarsSubQuery = this.avatarRepository
-      .createQueryBuilder('a')
-      .select('a.userId')
-      .where('a.deletedAt IS NULL')
-      .groupBy('a.userId')
-      .having('COUNT(*) > :minActive', {
-        minActive: MIN_ACTIVE_AVATARS_FOR_MOST_ACTIVE,
-      });
-
-    const qb = this.usersRepository
-      .createQueryBuilder('u')
-      .where(`u.id IN (${usersWithManyActiveAvatarsSubQuery.getQuery()})`)
-      .andWhere('TRIM(u.description) != :empty', { empty: '' })
-      .andWhere('u.age >= :ageMin', { ageMin })
-      .andWhere('u.age <= :ageMax', { ageMax })
-      .andWhere('u.deletedAt IS NULL')
-      .orderBy('u.createdAt', 'DESC')
-      .skip(skip)
-      .take(limit);
-
-    qb.setParameters({
-      ...qb.getParameters(),
-      ...usersWithManyActiveAvatarsSubQuery.getParameters(),
+    const { users, total } = await this.usersRepository.findMostActive({
+      ageMin,
+      ageMax,
+      page,
+      limit,
+      minActiveAvatars: MIN_ACTIVE_AVATARS_FOR_MOST_ACTIVE,
     });
-
-    const [users, total] = await qb.getManyAndCount();
-
     const userIds = users.map((user) => user.id);
-    const lastAvatarByUserId = new Map<string, Avatar>();
-
-    if (userIds.length > 0) {
-      const avatars = await this.avatarRepository.find({
-        where: { userId: In(userIds), deletedAt: IsNull() },
-        order: { createdAt: 'DESC' },
-      });
-      for (const avatar of avatars) {
-        if (!lastAvatarByUserId.has(avatar.userId)) {
-          lastAvatarByUserId.set(avatar.userId, avatar);
-        }
-      }
-    }
+    const lastAvatarByUserId =
+      await this.avatarsRepository.findLastActiveByUserIds(userIds);
 
     const data: MostActiveUserItem[] = users.map((user) => ({
       user: this.sanitizeUser(user),
@@ -190,7 +152,7 @@ export class UsersService {
 
   async findOne(id: string): Promise<Omit<User, 'password' | 'refreshToken'>> {
     this.logger.debug(`Fetching user by id ${id}`);
-    const user = await this.usersRepository.findOne({ where: { id } });
+    const user = await this.usersRepository.findById(id);
 
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
@@ -204,16 +166,16 @@ export class UsersService {
     updateUserDto: UpdateUserDto,
   ): Promise<Omit<User, 'password' | 'refreshToken'>> {
     this.logger.log(`Updating user ${id}`);
-    const existingUser = await this.usersRepository.findOne({ where: { id } });
+    const existingUser = await this.usersRepository.findById(id);
 
     if (!existingUser) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
     if (updateUserDto.email && updateUserDto.email !== existingUser.email) {
-      const existingUser = await this.usersRepository.findOne({
-        where: { email: updateUserDto.email },
-      });
+      const existingUser = await this.usersRepository.findByEmail(
+        updateUserDto.email,
+      );
 
       if (existingUser) {
         throw new ConflictException('User with this email already exists');
@@ -232,27 +194,27 @@ export class UsersService {
       ...(hashedPassword && { password: hashedPassword }),
     };
 
-    const updatedUser = await this.usersRepository.save(dataToSave);
+    const updatedUser = await this.usersRepository.save(dataToSave as User);
     await this.invalidateUsersCache();
     return this.sanitizeUser(updatedUser);
   }
 
   async remove(id: string): Promise<void> {
     this.logger.log(`Removing user ${id}`);
-    const user = await this.usersRepository.findOne({ where: { id } });
+    const user = await this.usersRepository.findById(id);
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
-    await this.usersRepository.softRemove(user);
+    await this.usersRepository.softDelete(user);
     await this.invalidateUsersCache();
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { email } });
+    return this.usersRepository.findByEmail(email);
   }
 
   async findByLogin(login: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { login } });
+    return this.usersRepository.findByLogin(login);
   }
 
   @Transactional()
@@ -269,12 +231,7 @@ export class UsersService {
     }
 
     const orderedIds = [fromUserId, toUserId].sort();
-    const users = await this.usersRepository
-      .createQueryBuilder('user')
-      .setLock('pessimistic_write')
-      .where('user.id IN (:...ids)', { ids: orderedIds })
-      .orderBy('user.id', 'ASC')
-      .getMany();
+    const users = await this.usersRepository.getByIdsForUpdate(orderedIds);
 
     const sender = users.find((user) => user.id === fromUserId);
     if (!sender) {
@@ -298,18 +255,13 @@ export class UsersService {
     sender.balance = this.toBalanceValue(nextSenderBalanceCents);
     receiver.balance = this.toBalanceValue(receiverBalanceCents + amountCents);
 
-    await this.usersRepository.save([sender, receiver]);
+    await this.usersRepository.saveMany([sender, receiver]);
     await this.invalidateUsersCache();
   }
 
   async resetAllBalances(): Promise<void> {
     this.logger.log('Resetting balances for all active users');
-    await this.usersRepository
-      .createQueryBuilder()
-      .update(User)
-      .set({ balance: '0.00' })
-      .where('deletedAt IS NULL')
-      .execute();
+    await this.usersRepository.resetBalancesForActiveUsers();
     await this.invalidateUsersCache();
   }
 
