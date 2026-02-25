@@ -1,12 +1,18 @@
-import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import {
+  Injectable,
+  ConflictException,
+  UnauthorizedException,
+  Logger,
+  Inject,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { User } from '../users/entities/user.entity';
+import { ConfigService } from '@nestjs/config';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { Role } from './enums/role.enum';
 import { hashPassword, comparePasswords } from '../common/utils/password.util';
+import { USERS_REPOSITORY } from '../users/ports/users-repository.port';
+import type { UsersRepositoryPort } from '../users/ports/users-repository.port';
 
 export interface AuthResponse {
   accessToken: string;
@@ -22,24 +28,28 @@ export interface AuthResponse {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
-    @InjectRepository(User)
-    private usersRepository: Repository<User>,
+    @Inject(USERS_REPOSITORY)
+    private readonly usersRepository: UsersRepositoryPort,
     private jwtService: JwtService,
+    private configService: ConfigService,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<AuthResponse> {
-    const existingUserByLogin = await this.usersRepository.findOne({
-      where: { login: registerDto.login },
-    });
+    this.logger.log(`Register request for login "${registerDto.login}"`);
+    const existingUserByLogin = await this.usersRepository.findByLogin(
+      registerDto.login,
+    );
 
     if (existingUserByLogin) {
       throw new ConflictException('User with this login already exists');
     }
 
-    const existingUserByEmail = await this.usersRepository.findOne({
-      where: { email: registerDto.email },
-    });
+    const existingUserByEmail = await this.usersRepository.findByEmail(
+      registerDto.email,
+    );
 
     if (existingUserByEmail) {
       throw new ConflictException('User with this email already exists');
@@ -47,7 +57,7 @@ export class AuthService {
 
     const hashedPassword = await hashPassword(registerDto.password);
 
-    const user = this.usersRepository.create({
+    const savedUser = await this.usersRepository.createAndSave({
       login: registerDto.login,
       email: registerDto.email,
       password: hashedPassword,
@@ -55,9 +65,11 @@ export class AuthService {
       description: registerDto.description,
     });
 
-    const savedUser = await this.usersRepository.save(user);
-
-    const tokens = await this.generateTokens(savedUser.id, savedUser.login, savedUser.role);
+    const tokens = await this.generateTokens(
+      savedUser.id,
+      savedUser.login,
+      savedUser.role,
+    );
     await this.updateRefreshToken(savedUser.id, tokens.refreshToken);
 
     return {
@@ -74,15 +86,17 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto): Promise<AuthResponse> {
-    const user = await this.usersRepository.findOne({
-      where: { login: loginDto.login },
-    });
+    this.logger.log(`Login request for login "${loginDto.login}"`);
+    const user = await this.usersRepository.findByLogin(loginDto.login);
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const isPasswordValid = await comparePasswords(loginDto.password, user.password);
+    const isPasswordValid = await comparePasswords(
+      loginDto.password,
+      user.password,
+    );
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
@@ -104,16 +118,21 @@ export class AuthService {
     };
   }
 
-  async refreshTokens(userId: string, refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
-    const user = await this.usersRepository.findOne({
-      where: { id: userId },
-    });
+  async refreshTokens(
+    userId: string,
+    refreshToken: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    this.logger.debug(`Refreshing token for user ${userId}`);
+    const user = await this.usersRepository.findById(userId);
 
     if (!user || !user.refreshToken) {
       throw new UnauthorizedException('Access denied');
     }
 
-    const isRefreshTokenValid = await comparePasswords(refreshToken, user.refreshToken);
+    const isRefreshTokenValid = await comparePasswords(
+      refreshToken,
+      user.refreshToken,
+    );
 
     if (!isRefreshTokenValid) {
       throw new UnauthorizedException('Invalid refresh token');
@@ -126,19 +145,36 @@ export class AuthService {
   }
 
   async logout(userId: string): Promise<void> {
-    await this.usersRepository.update(userId, { refreshToken: undefined });
+    this.logger.log(`Logout request for user ${userId}`);
+    await this.usersRepository.updateById(userId, { refreshToken: null });
   }
 
-  private async generateTokens(userId: string, login: string, role: Role): Promise<{ accessToken: string; refreshToken: string }> {
+  private async generateTokens(
+    userId: string,
+    login: string,
+    role: Role,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const jwtSecret = this.configService.get<string>('JWT_SECRET');
+    const jwtRefreshSecret =
+      this.configService.get<string>('JWT_REFRESH_SECRET');
+
+    if (!jwtSecret) {
+      throw new Error('JWT_SECRET is not set');
+    }
+
+    if (!jwtRefreshSecret) {
+      throw new Error('JWT_REFRESH_SECRET is not set');
+    }
+
     const payload = { sub: userId, login, role };
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
-        secret: process.env.JWT_SECRET || 'your-secret-key-change-in-production',
+        secret: jwtSecret,
         expiresIn: '15m',
       }),
       this.jwtService.signAsync(payload, {
-        secret: process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key-change-in-production',
+        secret: jwtRefreshSecret,
         expiresIn: '7d',
       }),
     ]);
@@ -149,8 +185,13 @@ export class AuthService {
     };
   }
 
-  private async updateRefreshToken(userId: string, refreshToken: string): Promise<void> {
+  private async updateRefreshToken(
+    userId: string,
+    refreshToken: string,
+  ): Promise<void> {
     const hashedRefreshToken = await hashPassword(refreshToken);
-    await this.usersRepository.update(userId, { refreshToken: hashedRefreshToken });
+    await this.usersRepository.updateById(userId, {
+      refreshToken: hashedRefreshToken,
+    });
   }
 }

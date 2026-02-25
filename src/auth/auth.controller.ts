@@ -1,22 +1,29 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
-import { 
-  ApiTags, 
-  ApiOperation, 
-  ApiBearerAuth, 
-  ApiCreatedResponse, 
-  ApiOkResponse, 
-  ApiBadRequestResponse, 
-  ApiConflictResponse, 
-  ApiUnauthorizedResponse 
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiConflictResponse,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { User } from '../users/entities/user.entity';
 import { AuthService } from './auth.service';
-import { RegisterDto } from './dto/register.dto';
+import { CurrentUser } from './decorators/current-user.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { RefreshTokenGuard } from './guards/refresh-token.guard';
+import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { CurrentUser } from './decorators/current-user.decorator';
-import { User } from '../users/entities/user.entity';
+import { RefreshTokenGuard } from './guards/refresh-token.guard';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -49,8 +56,14 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiOkResponse({ description: 'Token successfully refreshed' })
   @ApiUnauthorizedResponse({ description: 'Invalid refresh token' })
-  async refreshTokens(@CurrentUser() user: User, @Body() refreshTokenDto: RefreshTokenDto) {
-    return this.authService.refreshTokens(user.id, refreshTokenDto.refreshToken);
+  async refreshTokens(
+    @CurrentUser() user: User,
+    @Body() refreshTokenDto: RefreshTokenDto,
+  ) {
+    return this.authService.refreshTokens(
+      user.id,
+      refreshTokenDto.refreshToken,
+    );
   }
 
   @Post('logout')

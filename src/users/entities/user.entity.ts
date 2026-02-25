@@ -1,7 +1,16 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  DeleteDateColumn,
+  Index,
+} from 'typeorm';
 import { Role } from '../../auth/enums/role.enum';
 
 @Entity('users')
+@Index(['age', 'deletedAt'])
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -22,14 +31,22 @@ export class User {
   description: string;
 
   @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
+  balance: string;
+
+  @Column({
     type: 'enum',
     enum: Role,
     default: Role.User,
   })
   role: Role;
 
-  @Column({ nullable: true })
-  refreshToken: string;
+  @Column({ type: 'varchar', nullable: true })
+  refreshToken: string | null;
 
   @CreateDateColumn()
   createdAt: Date;
