@@ -14,7 +14,7 @@ import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { FindMostActiveUsersQueryDto } from './dto/find-most-active-users-query.dto';
 import { User } from './entities/user.entity';
 import { Avatar } from '../avatars/entities/avatar.entity';
-import { hashPassword } from '../common/utils/password.util';
+import { hashPassword, toBalanceValue, toCents } from '@app/shared';
 import { Transactional } from 'typeorm-transactional';
 import { TransferBalanceDto } from './dto/transfer-balance.dto';
 import { USERS_REPOSITORY } from './ports/users-repository.port';
@@ -39,7 +39,6 @@ export interface MostActiveUsersResult {
 
 @Injectable()
 export class UsersService {
-  private static readonly CENTS_IN_DOLLAR = 100;
   private readonly logger = new Logger(UsersService.name);
 
   constructor(
@@ -243,17 +242,17 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${toUserId} not found`);
     }
 
-    const amountCents = this.toCents(amount);
-    const senderBalanceCents = this.toCents(sender.balance);
-    const receiverBalanceCents = this.toCents(receiver.balance);
+    const amountCents = toCents(amount);
+    const senderBalanceCents = toCents(sender.balance);
+    const receiverBalanceCents = toCents(receiver.balance);
     const nextSenderBalanceCents = senderBalanceCents - amountCents;
 
     if (nextSenderBalanceCents < 0) {
       throw new BadRequestException('Insufficient balance');
     }
 
-    sender.balance = this.toBalanceValue(nextSenderBalanceCents);
-    receiver.balance = this.toBalanceValue(receiverBalanceCents + amountCents);
+    sender.balance = toBalanceValue(nextSenderBalanceCents);
+    receiver.balance = toBalanceValue(receiverBalanceCents + amountCents);
 
     await this.usersRepository.saveMany([sender, receiver]);
     await this.invalidateUsersCache();
@@ -263,15 +262,6 @@ export class UsersService {
     this.logger.log('Resetting balances for all active users');
     await this.usersRepository.resetBalancesForActiveUsers();
     await this.invalidateUsersCache();
-  }
-
-  private toCents(value: string | number): number {
-    const numericValue = typeof value === 'number' ? value : Number(value);
-    return Math.round(numericValue * UsersService.CENTS_IN_DOLLAR);
-  }
-
-  private toBalanceValue(cents: number): string {
-    return (cents / UsersService.CENTS_IN_DOLLAR).toFixed(2);
   }
 
   private sanitizeUser(user: User): Omit<User, 'password' | 'refreshToken'> {
