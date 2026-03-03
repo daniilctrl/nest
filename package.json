@@ -20,7 +20,7 @@
     "start:prod": "node dist/apps/user-service/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
-    "test:all": "npm run test -- --runInBand && npm run test:e2e -- --runInBand --detectOpenHandles --forceExit",
+    "test:all": "npm run test -- --runInBand && npm run test:e2e:user-service -- --runInBand --detectOpenHandles --forceExit && npm run test:e2e:notification-service -- --runInBand --detectOpenHandles --forceExit",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
