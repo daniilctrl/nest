@@ -8,6 +8,7 @@ import type { AvatarsRepositoryPort } from '../avatars/ports/avatars-repository.
 import { User } from './entities/user.entity';
 import { USERS_REPOSITORY } from './ports/users-repository.port';
 import type { UsersRepositoryPort } from './ports/users-repository.port';
+import { UsersEventsPublisher } from './events/users-events.publisher';
 import { UsersService } from './users.service';
 
 jest.mock('typeorm-transactional', () => {
@@ -46,6 +47,11 @@ describe('UsersService', () => {
   let service: UsersService;
   let usersRepository: MockUsersRepository;
   let avatarsRepository: MockAvatarsRepository;
+  let usersEventsPublisher: jest.Mocked<UsersEventsPublisher>;
+  let publishBalanceTransferredMock: jest.Mock<
+    Promise<void>,
+    Parameters<UsersEventsPublisher['publishBalanceTransferred']>
+  >;
   const cacheManager = {
     clear: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
   };
@@ -69,6 +75,17 @@ describe('UsersService', () => {
     avatarsRepository = {
       findLastActiveByUserIds: jest.fn(),
     };
+    publishBalanceTransferredMock = jest
+      .fn<
+        Promise<void>,
+        Parameters<UsersEventsPublisher['publishBalanceTransferred']>
+      >()
+      .mockResolvedValue(undefined);
+    usersEventsPublisher = {
+      onModuleInit: jest.fn(),
+      onModuleDestroy: jest.fn(),
+      publishBalanceTransferred: publishBalanceTransferredMock,
+    } as unknown as jest.Mocked<UsersEventsPublisher>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -76,6 +93,7 @@ describe('UsersService', () => {
         { provide: USERS_REPOSITORY, useValue: usersRepository },
         { provide: AVATARS_REPOSITORY, useValue: avatarsRepository },
         { provide: CACHE_MANAGER, useValue: cacheManager },
+        { provide: UsersEventsPublisher, useValue: usersEventsPublisher },
       ],
     }).compile();
 
@@ -171,6 +189,12 @@ describe('UsersService', () => {
     const savedReceiver = savedUsers.find((user) => user.id === 'u2');
     expect(savedSender?.balance).toBe('99.90');
     expect(savedReceiver?.balance).toBe('1.25');
+    expect(publishBalanceTransferredMock).toHaveBeenCalledTimes(1);
+    expect(publishBalanceTransferredMock.mock.calls[0]?.[0]).toMatchObject({
+      fromUserId: 'u1',
+      toUserId: 'u2',
+      amount: 0.15,
+    });
     expect(cacheManager.clear).toHaveBeenCalledTimes(1);
   });
 });

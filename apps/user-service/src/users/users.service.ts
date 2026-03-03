@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { randomUUID } from 'crypto';
 import type { Cache } from 'cache-manager';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -14,13 +15,19 @@ import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { FindMostActiveUsersQueryDto } from './dto/find-most-active-users-query.dto';
 import { User } from './entities/user.entity';
 import { Avatar } from '../avatars/entities/avatar.entity';
-import { hashPassword, toBalanceValue, toCents } from '@app/shared';
+import {
+  hashPassword,
+  toBalanceValue,
+  toCents,
+  type BalanceTransferredEvent,
+} from '@app/shared';
 import { Transactional } from 'typeorm-transactional';
 import { TransferBalanceDto } from './dto/transfer-balance.dto';
 import { USERS_REPOSITORY } from './ports/users-repository.port';
 import type { UsersRepositoryPort } from './ports/users-repository.port';
 import { AVATARS_REPOSITORY } from '../avatars/ports/avatars-repository.port';
 import type { AvatarsRepositoryPort } from '../avatars/ports/avatars-repository.port';
+import { UsersEventsPublisher } from './events/users-events.publisher';
 
 const MIN_ACTIVE_AVATARS_FOR_MOST_ACTIVE = 2;
 
@@ -48,6 +55,7 @@ export class UsersService {
     private readonly avatarsRepository: AvatarsRepositoryPort,
     @Inject(CACHE_MANAGER)
     private readonly cacheManager: Cache,
+    private readonly usersEventsPublisher: UsersEventsPublisher,
   ) {}
 
   async create(
@@ -255,7 +263,31 @@ export class UsersService {
     receiver.balance = toBalanceValue(receiverBalanceCents + amountCents);
 
     await this.usersRepository.saveMany([sender, receiver]);
-    await this.invalidateUsersCache();
+    const transferEvent: BalanceTransferredEvent = {
+      eventId: randomUUID(),
+      fromUserId,
+      toUserId,
+      amount,
+      transferredAt: new Date().toISOString(),
+    };
+
+    try {
+      await this.invalidateUsersCache();
+    } catch (error: unknown) {
+      this.logger.error(
+        'Failed to invalidate users cache after balance transfer',
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+
+    try {
+      await this.usersEventsPublisher.publishBalanceTransferred(transferEvent);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Failed to publish Kafka transfer event (eventId=${transferEvent.eventId})`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 
   async resetAllBalances(): Promise<void> {
