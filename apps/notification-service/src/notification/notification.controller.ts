@@ -1,16 +1,22 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  UseGuards,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import { NotificationGateway } from './notification.gateway';
-
-class SendNotificationDto {
-  userId!: string;
-  payload?: unknown;
-}
+import { SendNotificationDto } from './dto/send-notification.dto';
+import { HttpJwtAuthGuard } from './guards/http-jwt-auth.guard';
 
 @Controller('notifications')
 export class NotificationController {
   constructor(private readonly notificationGateway: NotificationGateway) {}
 
   @Post()
+  @UseGuards(HttpJwtAuthGuard)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   send(@Body() body: SendNotificationDto) {
     const { userId, payload } = body;
 
