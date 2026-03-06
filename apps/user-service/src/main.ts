@@ -40,7 +40,11 @@ async function bootstrap() {
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, documentFactory);
 
-  await app.listen(process.env.PORT ?? 3000);
+  const port = process.env.USER_SERVICE_PORT;
+  if (!port) {
+    throw new Error('USER_SERVICE_PORT environment variable is required');
+  }
+  await app.listen(port);
 }
 bootstrap().catch((error) => {
   console.error('Failed to start application:', error);
