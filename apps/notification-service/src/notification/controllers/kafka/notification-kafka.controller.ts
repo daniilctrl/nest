@@ -4,7 +4,8 @@ import {
   BALANCE_TRANSFERRED_TOPIC,
   type BalanceTransferredEvent,
 } from '@app/shared';
-import { NotificationGateway } from './notification.gateway';
+import { NotificationGateway } from '../../gateways/notification.gateway';
+import { TransferNotificationsService } from '../../transfer-notifications.service';
 
 @Controller()
 export class NotificationKafkaController {
@@ -13,13 +14,14 @@ export class NotificationKafkaController {
   constructor(
     @Inject(NotificationGateway)
     private readonly notificationGateway: NotificationGateway,
+    private readonly transferNotificationsService: TransferNotificationsService,
   ) {}
 
   @EventPattern(BALANCE_TRANSFERRED_TOPIC)
-  handleBalanceTransferred(
+  async handleBalanceTransferred(
     @Payload()
     payload: BalanceTransferredEvent | { value?: BalanceTransferredEvent },
-  ): void {
+  ): Promise<void> {
     const event = this.extractEvent(payload);
 
     if (!event?.toUserId) {
@@ -36,7 +38,19 @@ export class NotificationKafkaController {
       transferredAt: event.transferredAt,
     };
 
+    const persistPromise =
+      this.transferNotificationsService.createFromEvent(event);
+
     this.notificationGateway.sendNotification(event.toUserId, socketPayload);
+
+    try {
+      await persistPromise;
+    } catch (error: unknown) {
+      this.logger.error(
+        `Failed to persist transfer notification (eventId=${event.eventId})`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 
   private extractEvent(

@@ -1,5 +1,5 @@
 import { NotificationGateway } from './notification.gateway';
-import { MessageInDto } from './dto/message-in.dto';
+import { MessageInDto } from '../dto/message-in.dto';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';

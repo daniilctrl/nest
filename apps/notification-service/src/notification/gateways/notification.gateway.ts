@@ -13,8 +13,8 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { Server, Socket } from 'socket.io';
-import type { MessageInDto } from './dto/message-in.dto';
-import type { MessageOutDto } from './dto/message-out.dto';
+import type { MessageInDto } from '../dto/message-in.dto';
+import type { MessageOutDto } from '../dto/message-out.dto';
 
 @WebSocketGateway({
   namespace: '/notification',

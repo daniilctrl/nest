@@ -6,7 +6,7 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import { NotificationGateway } from './notification.gateway';
+import { NotificationGateway } from './gateways/notification.gateway';
 import { SendNotificationDto } from './dto/send-notification.dto';
 import { HttpJwtAuthGuard } from './guards/http-jwt-auth.guard';
 

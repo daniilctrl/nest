@@ -10,6 +10,16 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+  mongo:
+    image: mongo:7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: secret
+      MONGO_INITDB_DATABASE: notifications
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
   minio:
     image: minio/minio
     command: server --console-address ":9001" /data
@@ -72,4 +82,5 @@ networks:
 
 volumes:
   postgres_data:
+  mongo_data:
   minio_storage:
