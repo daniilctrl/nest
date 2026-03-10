@@ -6,6 +6,8 @@ import {
   Inject,
   Logger,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { randomUUID } from 'crypto';
 import type { Cache } from 'cache-manager';
@@ -27,7 +29,7 @@ import { USERS_REPOSITORY } from './ports/users-repository.port';
 import type { UsersRepositoryPort } from './ports/users-repository.port';
 import { AVATARS_REPOSITORY } from '../avatars/ports/avatars-repository.port';
 import type { AvatarsRepositoryPort } from '../avatars/ports/avatars-repository.port';
-import { UsersEventsPublisher } from './events/users-events.publisher';
+import { OutboxEvent } from './entities/outbox-event.entity';
 
 const MIN_ACTIVE_AVATARS_FOR_MOST_ACTIVE = 2;
 
@@ -55,7 +57,8 @@ export class UsersService {
     private readonly avatarsRepository: AvatarsRepositoryPort,
     @Inject(CACHE_MANAGER)
     private readonly cacheManager: Cache,
-    private readonly usersEventsPublisher: UsersEventsPublisher,
+    @InjectRepository(OutboxEvent)
+    private readonly outboxRepository: Repository<OutboxEvent>,
   ) {}
 
   async create(
@@ -271,20 +274,16 @@ export class UsersService {
       transferredAt: new Date().toISOString(),
     };
 
+    await this.outboxRepository.save({
+      topic: 'balance.transferred',
+      payload: transferEvent as unknown as Record<string, any>,
+    });
+
     try {
       await this.invalidateUsersCache();
     } catch (error: unknown) {
       this.logger.error(
         'Failed to invalidate users cache after balance transfer',
-        error instanceof Error ? error.stack : String(error),
-      );
-    }
-
-    try {
-      await this.usersEventsPublisher.publishBalanceTransferred(transferEvent);
-    } catch (error: unknown) {
-      this.logger.error(
-        `Failed to publish Kafka transfer event (eventId=${transferEvent.eventId})`,
         error instanceof Error ? error.stack : String(error),
       );
     }

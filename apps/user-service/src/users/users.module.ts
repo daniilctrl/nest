@@ -6,6 +6,7 @@ import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { User } from './entities/user.entity';
 import { Avatar } from '../avatars/entities/avatar.entity';
+import { OutboxEvent } from './entities/outbox-event.entity';
 import { HttpCacheInterceptor } from '../cache/http-cache.interceptor';
 import { USERS_REPOSITORY } from './ports/users-repository.port';
 import { TypeOrmUsersRepository } from './repositories/typeorm-users.repository';
@@ -13,10 +14,11 @@ import { AVATARS_REPOSITORY } from '../avatars/ports/avatars-repository.port';
 import { TypeOrmAvatarsRepository } from '../avatars/repositories/typeorm-avatars.repository';
 import { USERS_KAFKA_CLIENT } from './users.constants';
 import { UsersEventsPublisher } from './events/users-events.publisher';
+import { OutboxProcessor } from './processors/outbox.processor';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Avatar]),
+    TypeOrmModule.forFeature([User, Avatar, OutboxEvent]),
     ClientsModule.registerAsync([
       {
         name: USERS_KAFKA_CLIENT,
@@ -66,6 +68,7 @@ import { UsersEventsPublisher } from './events/users-events.publisher';
   providers: [
     UsersService,
     UsersEventsPublisher,
+    OutboxProcessor,
     HttpCacheInterceptor,
     TypeOrmUsersRepository,
     TypeOrmAvatarsRepository,

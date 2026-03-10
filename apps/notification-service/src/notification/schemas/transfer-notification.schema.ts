@@ -9,6 +9,9 @@ export type TransferNotificationDocument =
   versionKey: false,
 })
 export class TransferNotification {
+  @Prop({ required: true, unique: true, trim: true })
+  eventId!: string;
+
   @Prop({ required: true, trim: true })
   fromUserId!: string;
 

@@ -38,18 +38,20 @@ export class NotificationKafkaController {
       transferredAt: event.transferredAt,
     };
 
-    const persistPromise =
-      this.transferNotificationsService.createFromEvent(event);
-
-    this.notificationGateway.sendNotification(event.toUserId, socketPayload);
+    let isNewEvent = true;
 
     try {
-      await persistPromise;
+      isNewEvent =
+        await this.transferNotificationsService.createFromEvent(event);
     } catch (error: unknown) {
       this.logger.error(
         `Failed to persist transfer notification (eventId=${event.eventId})`,
         error instanceof Error ? error.stack : String(error),
       );
+    }
+
+    if (isNewEvent) {
+      this.notificationGateway.sendNotification(event.toUserId, socketPayload);
     }
   }
 

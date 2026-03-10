@@ -13,6 +13,8 @@ import { DataSource } from 'typeorm';
 import { addTransactionalDataSource } from 'typeorm-transactional';
 import { BullModule } from '@nestjs/bullmq';
 import { BalanceResetModule } from './balance-reset/balance-reset.module';
+import { OutboxEvent } from './users/entities/outbox-event.entity';
+import { ScheduleModule } from '@nestjs/schedule';
 import {
   getBullModuleOptions,
   getCacheModuleOptions,
@@ -48,7 +50,7 @@ import {
           username: configService.get<string>('DB_USERNAME'),
           password: configService.get<string>('DB_PASSWORD'),
           database: configService.get<string>('DB_NAME'),
-          entities: [User, Avatar],
+          entities: [User, Avatar, OutboxEvent],
           synchronize: true,
         };
       },
@@ -65,6 +67,7 @@ import {
     AuthModule,
     AvatarsModule,
     BalanceResetModule,
+    ScheduleModule.forRoot(),
   ],
   controllers: [AppController],
   providers: [AppService],

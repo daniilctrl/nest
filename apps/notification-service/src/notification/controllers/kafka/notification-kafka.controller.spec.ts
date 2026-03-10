@@ -12,7 +12,7 @@ describe('NotificationKafkaController', () => {
       sendNotification: jest.fn(),
     };
     transferNotificationsService = {
-      createFromEvent: jest.fn().mockResolvedValue(undefined),
+      createFromEvent: jest.fn().mockResolvedValue(true),
     };
 
     controller = new NotificationKafkaController(
