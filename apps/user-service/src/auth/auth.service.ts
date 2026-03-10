@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { Role } from './enums/role.enum';
-import { hashPassword, comparePasswords } from '../common/utils/password.util';
+import { hashPassword, comparePasswords } from '@app/shared';
 import { USERS_REPOSITORY } from '../users/ports/users-repository.port';
 import type { UsersRepositoryPort } from '../users/ports/users-repository.port';
 

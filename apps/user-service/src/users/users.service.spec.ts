@@ -9,6 +9,8 @@ import { User } from './entities/user.entity';
 import { USERS_REPOSITORY } from './ports/users-repository.port';
 import type { UsersRepositoryPort } from './ports/users-repository.port';
 import { UsersService } from './users.service';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { OutboxEvent } from './entities/outbox-event.entity';
 
 jest.mock('typeorm-transactional', () => {
   return {
@@ -46,6 +48,7 @@ describe('UsersService', () => {
   let service: UsersService;
   let usersRepository: MockUsersRepository;
   let avatarsRepository: MockAvatarsRepository;
+  let outboxRepository: { save: jest.Mock };
   const cacheManager = {
     clear: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
   };
@@ -69,6 +72,9 @@ describe('UsersService', () => {
     avatarsRepository = {
       findLastActiveByUserIds: jest.fn(),
     };
+    outboxRepository = {
+      save: jest.fn().mockResolvedValue(new OutboxEvent()),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -76,6 +82,10 @@ describe('UsersService', () => {
         { provide: USERS_REPOSITORY, useValue: usersRepository },
         { provide: AVATARS_REPOSITORY, useValue: avatarsRepository },
         { provide: CACHE_MANAGER, useValue: cacheManager },
+        {
+          provide: getRepositoryToken(OutboxEvent),
+          useValue: outboxRepository,
+        },
       ],
     }).compile();
 
@@ -171,6 +181,18 @@ describe('UsersService', () => {
     const savedReceiver = savedUsers.find((user) => user.id === 'u2');
     expect(savedSender?.balance).toBe('99.90');
     expect(savedReceiver?.balance).toBe('1.25');
+    expect(outboxRepository.save).toHaveBeenCalledTimes(1);
+    const savedOutboxEvent = (
+      outboxRepository.save.mock.calls as unknown[][]
+    )[0]?.[0] as Record<string, unknown> | undefined;
+    expect(savedOutboxEvent).toMatchObject({
+      topic: 'balance.transferred',
+      payload: expect.objectContaining({
+        fromUserId: 'u1',
+        toUserId: 'u2',
+        amount: 0.15,
+      }) as unknown,
+    });
     expect(cacheManager.clear).toHaveBeenCalledTimes(1);
   });
 });
