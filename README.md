@@ -1,17 +1,26 @@
-# User Service (NestJS)
+# NestJS Monorepo
 
-## Requirements
+Монорепозиторий содержит два приложения:
+
+- `user-service` - основной API сервис с PostgreSQL
+- `notification-service` - каркас будущего сервиса уведомлений
+
+И одну общую библиотеку:
+
+- `libs/shared` - общие `utils` и `constants`, переиспользуемые между сервисами
+
+## Требования
 
 - Node.js 20+
 - npm
 - Docker + Docker Compose
 
-## Environment Variables
+## Переменные окружения
 
-1. Copy `env.example` to `.env`.
-2. Fill values if needed.
+1. Скопируйте `env.example` в `.env`
+2. При необходимости заполните значения
 
-## Run Infrastructure
+## Запуск инфраструктуры
 
 PostgreSQL + MinIO:
 
@@ -25,21 +34,48 @@ Redis:
 docker compose -f docker-compose.storage.yml up -d
 ```
 
-## Install and Run App
+## Установка зависимостей
 
 ```bash
 npm install
-npm run start:dev
 ```
 
-App: `http://localhost:3000`  
+## Запуск сервисов
+
+`user-service`:
+
+```bash
+npm run start:user-service:dev
+```
+
+`notification-service`:
+
+```bash
+npm run start:notification-service:dev
+```
+
+`user-service` HTTP: `http://localhost:3000`  
 Swagger: `http://localhost:3000/api`
 
-## Scripts
+## Сборка
 
-- `npm run build` - build project
-- `npm run start:dev` - start in watch mode
-- `npm run lint` - run ESLint with `--fix`
-- `npm test` - unit tests
-- `npm run test:e2e` - e2e tests
-- `npm run test:all` - unit + e2e tests
+```bash
+npm run build:user-service
+npm run build:notification-service
+```
+
+## Что такое Libraries в монорепе
+
+`libs` - это общий код (shared modules/utilities/types), который можно импортировать в разные приложения монорепозитория.
+
+В этом проекте в `libs/shared` вынесены:
+
+- `utils/password.util.ts`
+- `utils/money.util.ts`
+- `constants/money.constants.ts`
+
+Импорт выполняется через алиас:
+
+```ts
+import { hashPassword } from '@app/shared';
+```
