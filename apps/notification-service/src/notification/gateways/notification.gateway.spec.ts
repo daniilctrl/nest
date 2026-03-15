@@ -9,25 +9,25 @@ describe('NotificationGateway', () => {
   let jwtService: jest.Mocked<JwtService>;
   let configService: jest.Mocked<ConfigService>;
   let jwtVerifyMock: jest.Mock;
-  let configGetMock: jest.Mock;
+  let configGetOrThrowMock: jest.Mock;
 
   beforeEach(() => {
     jwtVerifyMock = jest.fn();
-    configGetMock = jest.fn();
+    configGetOrThrowMock = jest.fn();
 
     jwtService = {
       verify: jwtVerifyMock,
     } as unknown as jest.Mocked<JwtService>;
 
     configService = {
-      get: configGetMock,
+      getOrThrow: configGetOrThrowMock,
     } as unknown as jest.Mocked<ConfigService>;
 
     gateway = new NotificationGateway(jwtService, configService);
   });
 
   it('emits connected event on client connection', () => {
-    configGetMock.mockReturnValue('secret');
+    configGetOrThrowMock.mockReturnValue('secret');
     jwtVerifyMock.mockReturnValue({ sub: 'user-1' });
 
     const mockEmit = jest.fn();
@@ -48,7 +48,7 @@ describe('NotificationGateway', () => {
 
     gateway.handleConnection(mockClient);
 
-    expect(configGetMock).toHaveBeenCalledWith('JWT_SECRET');
+    expect(configGetOrThrowMock).toHaveBeenCalledWith('JWT_SECRET');
     expect(jwtVerifyMock).toHaveBeenCalledWith('token', {
       secret: 'secret',
     });
@@ -100,7 +100,7 @@ describe('NotificationGateway', () => {
   });
 
   it('disconnects client on invalid token', () => {
-    configGetMock.mockReturnValue('secret');
+    configGetOrThrowMock.mockReturnValue('secret');
     jwtVerifyMock.mockImplementation(() => {
       throw new Error('invalid token');
     });

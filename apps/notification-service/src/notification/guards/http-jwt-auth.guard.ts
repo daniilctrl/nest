@@ -28,10 +28,7 @@ export class HttpJwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Invalid Authorization header format');
     }
 
-    const jwtSecret = this.configService.get<string>('JWT_SECRET');
-    if (!jwtSecret) {
-      throw new UnauthorizedException('JWT_SECRET is not set');
-    }
+    const jwtSecret = this.configService.getOrThrow<string>('JWT_SECRET');
 
     try {
       this.jwtService.verify(token, { secret: jwtSecret });

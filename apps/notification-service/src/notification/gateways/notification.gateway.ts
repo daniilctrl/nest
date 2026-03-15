@@ -54,10 +54,7 @@ export class NotificationGateway
         throw new Error('Invalid Authorization header format');
       }
 
-      const jwtSecret = this.configService.get<string>('JWT_SECRET');
-      if (!jwtSecret) {
-        throw new Error('JWT_SECRET is not set');
-      }
+      const jwtSecret = this.configService.getOrThrow<string>('JWT_SECRET');
 
       const payload = this.jwtService.verify<{ sub: string }>(token, {
         secret: jwtSecret,

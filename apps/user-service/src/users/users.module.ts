@@ -25,19 +25,10 @@ import { OutboxProcessor } from './processors/outbox.processor';
         imports: [ConfigModule],
         inject: [ConfigService],
         useFactory: (configService: ConfigService) => {
-          const brokersRaw = configService.get<string>('KAFKA_BROKERS');
-          const clientId = configService.get<string>(
+          const brokersRaw = configService.getOrThrow<string>('KAFKA_BROKERS');
+          const clientId = configService.getOrThrow<string>(
             'KAFKA_CLIENT_ID_USER_SERVICE',
           );
-
-          if (!brokersRaw) {
-            throw new Error('KAFKA_BROKERS environment variable is required');
-          }
-          if (!clientId) {
-            throw new Error(
-              'KAFKA_CLIENT_ID_USER_SERVICE environment variable is required',
-            );
-          }
 
           const brokers = brokersRaw
             .split(',')

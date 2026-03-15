@@ -14,17 +14,9 @@ import { NotificationModule } from './notification/notification.module';
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const uri = configService.get<string>('MONGO_URI');
-
-        if (!uri) {
-          throw new Error('MONGO_URI environment variable is required');
-        }
-
-        return {
-          uri,
-        };
-      },
+      useFactory: (configService: ConfigService) => ({
+        uri: configService.getOrThrow<string>('MONGO_URI'),
+      }),
     }),
     NotificationModule,
   ],
